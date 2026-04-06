@@ -1,0 +1,300 @@
+function doGet(e) {
+  return HtmlService.createHtmlOutputFromFile('Index');
+}
+function getMainSS() {
+  return SpreadsheetApp.openById("1qCYvEW4w280moZsK4YF9o9FB68JncPYx5PEJSMM5Drs");
+}
+
+function getStudentSS() {
+  return SpreadsheetApp.openById("1qkO__QyixqPDKJ2yTmPuyIzHT650w19jvGAeVhg055c");
+}
+
+// --- NEW FUNCTION: Automatically builds sheets if they are missing ---
+function setupInitialSheets() {
+  var ss = SpreadsheetApp.openById("1qCYvEW4w280moZsK4YF9o9FB68JncPYx5PEJSMM5Drs");
+  var ss1 = SpreadsheetApp.openById("1qkO__QyixqPDKJ2yTmPuyIzHT650w19jvGAeVhg055c");
+  var isUpdated = false; 
+  
+  // 1. Check and create the "Teachers" sheet
+  var teacherSheet = ss.getSheetByName("Teachers");
+  if (!teacherSheet) {
+    teacherSheet = ss.insertSheet("Teachers");
+    teacherSheet.appendRow(["Teacher Name", "Subject Code"]);
+    teacherSheet.getRange("A1:B1").setFontWeight("bold").setBackground("#f0f2f5").setHorizontalAlignment("center");
+    //teacherSheet.appendRow(["Demo Teacher", "CS-101"]); 
+    teacherSheet.setColumnWidth(1, 150);
+    teacherSheet.setColumnWidth(2, 120);
+    isUpdated = true;
+  }
+  
+  // 2. Check and create the "Students" sheet 
+  var studentSheet = ss1.getSheetByName("Students");
+  if (!studentSheet) {
+    studentSheet = ss1.insertSheet("Students");
+    
+    studentSheet.appendRow(["Student Name", "Enrollment No", "Roll No", "Subject Code"]);
+    studentSheet.getRange("A1:D1").setFontWeight("bold").setBackground("#f0f2f5").setHorizontalAlignment("center");
+    
+    // Assigned the dummy students to "CS-101" so they match the Demo Teacher
+    studentSheet.appendRow(["Demo Student 1", "ENR001", "1", "CS-101"]);
+    studentSheet.appendRow(["Demo Student 2", "ENR002", "2", "CS-101"]);
+    
+    studentSheet.setColumnWidth(1, 180);
+    studentSheet.setColumnWidth(2, 120);
+    studentSheet.setColumnWidth(3, 80);
+    studentSheet.setColumnWidth(4, 120); 
+    isUpdated = true;
+  }
+
+  // 3. FORCE GOOGLE TO SAVE EVERYTHING IMMEDIATELY
+  if (isUpdated) {
+    SpreadsheetApp.flush(); 
+  }
+}
+/**
+ * NEW HELPER: Finds a sheet by checking multiple possible names.
+ * If none are found, it creates one with the provided default name and headers.
+ */
+function findOrCreateSheet(possibleNames, defaultName, defaultHeaders) {
+  var ss = getStudentSS(); // ✅ FIXED
+  
+  var sheets = ss.getSheets();
+  
+  for (var i = 0; i < sheets.length; i++) {
+    var name = sheets[i].getName().toLowerCase().trim();
+    if (possibleNames.indexOf(name) !== -1) {
+      return sheets[i];
+    }
+  }
+  
+  var newSheet = ss.insertSheet(defaultName);
+  
+  if (defaultHeaders && defaultHeaders.length > 0) {
+    newSheet.getRange(1, 1, 1, defaultHeaders.length)
+      .setValues([defaultHeaders])
+      .setFontWeight("bold");
+  }
+  
+  return newSheet;
+}
+function getOrCreateClassSheet(selectedDate, teacherName, subjectCode) {
+  var ss = getMainSS(); // ✅ FIXED
+  var parts = selectedDate.split('-');
+  var year = parseInt(parts[0], 10);
+  var monthIndex = parseInt(parts[1], 10) - 1; 
+  var day = parseInt(parts[2], 10);
+  var dateObj = new Date(year, monthIndex, day);
+  
+  var monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  var monthName = monthNames[dateObj.getMonth()];
+  var sheetName = subjectCode + "_" + monthName + "_" + year;
+  
+  var sheet = ss.getSheetByName(sheetName);
+  
+  // GUARANTEED GHOST-SHEET KILLER
+  if (sheet) {
+    if (sheet.getLastRow() < 7) {
+      ss.deleteSheet(sheet);
+    } else {
+      return sheet; 
+    }
+  }
+  
+  sheet = ss.insertSheet(sheetName);
+  var numDays = new Date(year, monthIndex + 1, 0).getDate();
+  var totalColsNeeded = 5 + numDays + 3; 
+  
+  var maxCols = sheet.getMaxColumns();
+  if (maxCols < totalColsNeeded) { sheet.insertColumnsAfter(maxCols, totalColsNeeded - maxCols); } 
+  else if (maxCols > totalColsNeeded) { sheet.deleteColumns(totalColsNeeded + 1, maxCols - totalColsNeeded); }
+
+  sheet.setColumnWidth(1, 21); sheet.setColumnWidth(2, 45); sheet.setColumnWidth(3, 160); 
+  sheet.setColumnWidth(4, 115); sheet.setColumnWidth(5, 85);  
+  for (var c = 6; c < 6 + numDays; c++) { sheet.setColumnWidth(c, 24); }
+  
+  var sumStart = 6 + numDays;
+  sheet.setColumnWidth(sumStart, 55); sheet.setColumnWidth(sumStart + 1, 55); sheet.setColumnWidth(sumStart + 2, 85); 
+
+  sheet.getDataRange().setFontFamily("Calibri");
+
+  sheet.getRange("B2:E3").setVerticalAlignment("middle");
+  sheet.getRange("B2").setValue("Month").setHorizontalAlignment("center");
+  sheet.getRange("C2").setValue(monthName).setHorizontalAlignment("center").setFontWeight("bold");
+  sheet.getRange("D2").setValue("Teacher").setHorizontalAlignment("center").setBackground("#f0f2f5");
+  sheet.getRange("E2").setValue(teacherName).setHorizontalAlignment("left").setFontWeight("bold");
+  sheet.getRange("B3").setValue("Year").setHorizontalAlignment("center");
+  sheet.getRange("C3").setValue(year).setHorizontalAlignment("center").setFontWeight("bold");
+  sheet.getRange("D3").setValue("Subject").setHorizontalAlignment("center").setBackground("#f0f2f5");
+  sheet.getRange("E3").setValue(subjectCode).setHorizontalAlignment("left").setFontWeight("bold");
+  sheet.getRange("B2:E3").setBorder(true, true, true, true, true, true, "black", SpreadsheetApp.BorderStyle.SOLID);
+  
+  var titleEndCol = columnToLetter(totalColsNeeded); 
+  sheet.getRange("F2:" + titleEndCol + "3").merge().setValue("Attendance Sheet").setBackground("#2f5597").setFontColor("white").setFontSize(16).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+       
+  sheet.getRange("B6").setValue("Sr No").setFontWeight("bold"); sheet.getRange("C6").setValue("Name").setFontWeight("bold");
+  sheet.getRange("D6").setValue("Enrollment No").setFontWeight("bold"); sheet.getRange("E6").setValue("Roll No").setFontWeight("bold");
+  sheet.getRange("B6:E6").setHorizontalAlignment("center").setVerticalAlignment("middle");
+  
+  var daysList = ["sun", "mo", "tue", "wed", "thu", "fri", "sat"];
+  var dayNums = []; var dayNames = []; var weekendCols = [];
+  
+  for (var d = 1; d <= numDays; d++) {
+    dayNums.push(d); var dDate = new Date(year, monthIndex, d); var dName = daysList[dDate.getDay()]; dayNames.push(dName);
+    if (dName === "sun" || dName === "sat") { weekendCols.push(5 + d); }
+  }
+  
+  sheet.getRange(5, 6, 1, numDays).setValues([dayNums]).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+  sheet.getRange(6, 6, 1, numDays).setValues([dayNames]).setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+  sheet.getRange(5, sumStart, 2, 1).merge().setValue("Present").setBackground("#00b050").setFontColor("black").setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+  sheet.getRange(5, sumStart + 1, 2, 1).merge().setValue("Absent").setBackground("#ff0000").setFontColor("white").setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+  sheet.getRange(5, sumStart + 2, 2, 1).merge().setValue("Total Holiday").setBackground("#0070c0").setFontColor("white").setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle");
+  
+  // SMART STUDENT SHEET DETECTION
+  // SMART STUDENT SHEET DETECTION (Updated for 4 columns)
+  var possibleStudentNames = ["students", "student", "sheet1", "data", "class"];
+  var studentSheet = findOrCreateSheet(possibleStudentNames, "Students", ["Student Name", "Enrollment No", "Roll No", "Subject Code"]);
+  
+  if (studentSheet && studentSheet.getLastRow() > 1) {
+    var lastStudentRow = studentSheet.getLastRow();
+    
+    // CHANGE: Fetch 4 columns instead of 3
+    var rawStudentData = studentSheet.getRange(2, 1, lastStudentRow - 1, 4).getValues();
+    
+    var gridData = [];
+    var srNo = 1;
+
+    for (var k = 0; k < rawStudentData.length; k++) {
+      var sName = rawStudentData[k][0];
+      var sEnroll = rawStudentData[k][1];
+      var sRoll = rawStudentData[k][2];
+      var sCode = rawStudentData[k][3]; // Grab the subject code from the 4th column
+      
+      // CHANGE: Only load if name isn't blank AND the Subject Codes match exactly
+      if (sName !== "" && sCode.toString().trim() === subjectCode.toString().trim()) { 
+        gridData.push([srNo, sName, sEnroll, sRoll]);
+        srNo++;
+      }
+    }
+    
+    if (gridData.length > 0) {
+      // The rest of the visual formatting remains exactly the same!
+      var dataRange = sheet.getRange(7, 2, gridData.length, 4);
+      dataRange.setValues(gridData);
+      
+      sheet.getRange(7, 2, gridData.length, 1).setHorizontalAlignment("center"); 
+      sheet.getRange(7, 3, gridData.length, 1).setHorizontalAlignment("left");   
+      sheet.getRange(7, 4, gridData.length, 2).setHorizontalAlignment("center"); 
+      
+      for (var i = 0; i < weekendCols.length; i++) {
+        var colIndex = weekendCols[i];
+        sheet.getRange(5, colIndex, 2, 1).setBackground("#e0e0e0");
+        var valArray = [];
+        for (var j = 0; j < gridData.length; j++) valArray.push(["H"]);
+        sheet.getRange(7, colIndex, gridData.length, 1).setValues(valArray).setBackground("#e0e0e0").setHorizontalAlignment("center"); 
+      }
+      
+      var dayColEndStr = columnToLetter(5 + numDays);
+      for (var r = 7; r < 7 + gridData.length; r++) {
+        sheet.getRange(r, sumStart).setFormula(`=COUNTIF(F${r}:${dayColEndStr}${r}, "p")`);
+        sheet.getRange(r, sumStart + 1).setFormula(`=COUNTIF(F${r}:${dayColEndStr}${r}, "a")`);
+        sheet.getRange(r, sumStart + 2).setFormula(`=COUNTIF(F${r}:${dayColEndStr}${r}, "H")`);
+      }
+      sheet.getRange(7, sumStart, gridData.length, 3).setHorizontalAlignment("center").setVerticalAlignment("middle");
+    }
+  }
+  
+  sheet.setFrozenRows(6); sheet.setFrozenColumns(5);
+  var finalRow = Math.max(7, sheet.getLastRow());
+  sheet.getRange(5, 2, finalRow - 4, totalColsNeeded - 1).setBorder(true, true, true, true, true, true, "black", SpreadsheetApp.BorderStyle.SOLID);
+  
+  return sheet;
+}
+
+function getStudents(selectedDate, teacherName, subjectCode) {
+  try {
+    var attendanceSheet = getOrCreateClassSheet(selectedDate, teacherName, subjectCode);
+    var parts = selectedDate.split('-');
+    var targetCol = 5 + parseInt(parts[2], 10); 
+    
+    var lastRow = attendanceSheet.getLastRow();
+    var studentData = [];
+    
+    if (lastRow >= 7) {
+      var names = attendanceSheet.getRange(7, 3, lastRow - 6, 1).getValues();
+      var enrolls = attendanceSheet.getRange(7, 4, lastRow - 6, 1).getValues();
+      var rolls = attendanceSheet.getRange(7, 5, lastRow - 6, 1).getValues();
+      var statuses = attendanceSheet.getRange(7, targetCol, lastRow - 6, 1).getValues();
+      
+      for (var i = 0; i < names.length; i++) {
+        var st = statuses[i][0];
+        var longStatus = "Not Marked";
+        if (st === "p" || st === "P") longStatus = "Present";
+        else if (st === "a" || st === "A") longStatus = "Absent";
+        else if (st === "H" || st === "h") longStatus = "Holiday";
+        
+        if (names[i][0] !== "") {
+          studentData.push({ name: names[i][0], enrollment: enrolls[i][0], roll: rolls[i][0], status: longStatus });
+        }
+      }
+    }
+    return studentData;
+  } catch (e) { throw new Error(e.message); }
+}
+
+function recordAttendance(name, enrollment, status, selectedDate, teacherName, subjectCode) {
+  var sheet = getOrCreateClassSheet(selectedDate, teacherName, subjectCode);
+  var parts = selectedDate.split('-');
+  var targetCol = 5 + parseInt(parts[2], 10);
+  
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 7) return status;
+  
+  var enrollments = sheet.getRange(7, 4, lastRow - 6, 1).getValues();
+  var foundRow = -1;
+  
+  for (var i = 0; i < enrollments.length; i++) {
+    if (enrollments[i][0] == enrollment) { foundRow = i + 7; break; }
+  }
+
+  if (foundRow > -1) {
+    var shortStatus = "";
+    if (status.toString().toLowerCase() === "present") shortStatus = "p";
+    else if (status.toString().toLowerCase() === "absent") shortStatus = "a";
+    else shortStatus = status; 
+    sheet.getRange(foundRow, targetCol).setValue(shortStatus).setHorizontalAlignment("center");
+  }
+  return status;
+}
+
+function getTeacherList() {
+  setupInitialSheets();
+  
+  var ss = getMainSS(); // ✅ FIXED
+  var sheet = ss.getSheetByName("Teachers");
+  if (!sheet) return [];
+  
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return []; 
+  
+  var data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  var classes = [];
+  
+  for (var i = 0; i < data.length; i++) {
+    var tName = data[i][0] ? data[i][0].toString().trim() : "";
+    var sCode = data[i][1] ? data[i][1].toString().trim() : "";
+    
+    if (tName !== "" && sCode !== "") { 
+      classes.push({ teacher: tName, subject: sCode }); 
+    }
+  }
+  return classes;
+}
+function columnToLetter(column) {
+  var temp, letter = '';
+  while (column > 0) {
+    temp = (column - 1) % 26;
+    letter = String.fromCharCode(temp + 65) + letter;
+    column = (column - temp - 1) / 26;
+  }
+  return letter;
+}
