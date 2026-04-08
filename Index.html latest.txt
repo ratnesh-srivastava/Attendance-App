@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+      body { font-family: 'Segoe UI', sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;   
+  min-height: 100vh;         
+  margin: 0;
+  padding-top: 20px;         
+  background-color: #f0f2f5;
+  overflow-y: auto;
+  touch-action: manipulation;}
+      .container { background: white;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  text-align: center;
+  width: 350px;
+  position: relative;
+  max-height: 95vh;  
+  overflow-y: auto; }
+      
+      #setupScreen { display: flex; flex-direction: column; gap: 15px; }
+      .setup-title { font-size: 22px; font-weight: bold; color: #202124; margin-bottom: 10px; }
+      .input-field { padding: 12px; border-radius: 8px; border: 1px solid #dfe1e5; font-size: 15px; outline: none; width: 100%; box-sizing: border-box; }
+      .start-btn { background-color: #1a73e8; color: white; border: none; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+      .start-btn:disabled { background-color: #a0c1f2; cursor: not-allowed; }
+
+      #appScreen { display: none; }
+      .date-picker { margin-bottom: 20px; padding: 10px; border-radius: 8px; border: 1px solid #dfe1e5; width: 90%; font-size: 14px; outline: none; }
+      
+      #studentCard { transition: transform 0.2s ease, opacity 0.2s ease; touch-action: pan-y; } 
+      .fade-out { transform: translateX(-20px); opacity: 0; }
+      .fade-in { transform: translateX(20px); opacity: 0; }
+
+      .roll-badge { background: #e8f0fe; color: #1a73e8; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 10px; }
+      
+      select.name-display { font-size: 22px; font-weight: bold; color: #202124; margin-bottom: 15px; width: 100%; border: 2px solid #dfe1e5; border-radius: 12px; padding: 15px; background-color: #f8f9fa; cursor: pointer; outline: none; text-align: center; }
+      
+      .status-label { font-size: 13px; font-weight: bold; margin: 15px 0; padding: 8px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+      .status-Not.Marked { background: #f1f3f4; color: #5f6368; }
+      .status-Present { background: #e6f4ea; color: #1e8e3e; border: 1px solid #34a853; }
+      .status-Absent { background: #fce8e6; color: #d93025; border: 1px solid #ea4335; }
+      .status-Holiday { background: #e8eaed; color: #3c4043; border: 1px solid #9aa0a6; }
+
+      .btn-group { display: flex; justify-content: space-around; margin-top: 25px; gap: 10px; }
+      button.attendance-btn { padding: 18px 0; font-size: 16px; border: none; border-radius: 12px; cursor: pointer; color: white; width: 48%; font-weight: 600; }
+      .present { background-color: #34a853; }
+      .absent { background-color: #ea4335; }
+
+      .nav-group { margin-top: 30px; display: flex; justify-content: space-between; border-top: 1px solid #f1f3f4; padding-top: 15px; }
+      .nav-btn { color: #1a73e8; font-size: 13px; cursor: pointer; font-weight: 500; padding: 5px 10px; }
+      
+      #counter { font-size: 11px; color: #70757a; margin-top: 15px; font-weight: bold; }
+      #loadingOverlay { display:none; position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); border-radius:20px; align-items:center; justify-content:center; z-index:10; font-weight: bold; color: #1a73e8; flex-direction: column; }
+      .admin-btn {
+  position: sticky;
+  top: 10px;
+  z-index: 5;
+  border: 2px solid red;
+}
+
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="loadingOverlay">
+        <span>LOADING...</span>
+        <span id="loadingSubtext" style="font-size:11px; color:#5f6368; margin-top:5px;"></span>
+      </div>
+      
+    <div id="setupScreen">
+
+  <button class="admin-btn" onclick="openAdmin()" style="margin-bottom:10px;">
+    + Add Data
+  </button>
+
+  <div class="setup-title">Select Class</div>
+
+  <select id="classDropdown" class="input-field">
+    <option value="" disabled selected>Fetching Classes...</option>
+  </select>
+
+  <button id="startBtn" class="start-btn" onclick="startApp()" disabled>
+    START ATTENDANCE
+  </button>
+</div>
+
+
+      <div id="appScreen">
+       <input type="date" id="dateSelect" class="date-picker" onchange="loadData()">
+        
+        <div id="studentCard">
+          <div id="rollBadge" class="roll-badge">Roll #--</div>
+          <select id="nameDisplay" class="name-display" onchange="jumpToStudent()"></select>
+          <div id="statusDisplay" class="status-label status-Not.Marked">Status: Not Marked</div>
+          
+          <div class="btn-group">
+            <button class="attendance-btn present" onclick="log('Present')">PRESENT</button>
+            <button class="attendance-btn absent" onclick="log('Absent')">ABSENT</button>
+          </div>
+        </div>
+
+        <div class="nav-group">
+          <span class="nav-btn" onclick="move(-1)">← SWIPE BACK</span>
+          <span class="nav-btn" onclick="move(1)">SWIPE SKIP →</span>
+        </div>
+        
+        <div id="counter">STUDENT 0 OF 0</div>
+      </div>
+       <div id="adminScreen" style="display:none;">
+  <h3>Add Teacher</h3>
+  <input id="tName" placeholder="Teacher Name" class="input-field">
+  <input id="tSubject" placeholder="Subject Code" class="input-field">
+  <button onclick="saveTeacher()">Save Teacher</button>
+
+  <h3 style="margin-top:20px;">Add Student</h3>
+  <input id="sName" placeholder="Student Name" class="input-field">
+  <input id="sEnroll" placeholder="Enrollment No" class="input-field">
+  <input id="sRoll" placeholder="Roll No" class="input-field">
+  <select id="sSubject" class="input-field">
+  <option value="" disabled selected>Select Subject</option>
+</select>
+  <button onclick="saveStudent()">Save Student</button>
+
+  <br><br>
+  <button onclick="closeAdmin()">Back</button>
+</div>
+    </div>
+
+    <script>
+      let students = [];
+      let currentIndex = 0;
+      let currentTeacher = "";
+      let currentSubject = "";
+      let availableClasses = []; 
+
+      // --- PASTE THIS MISSING FUNCTION ---
+      function showLoading(isShowing, text = "") {
+        const overlay = document.getElementById("loadingOverlay");
+        const subtext = document.getElementById("loadingSubtext");
+        if (isShowing) {
+          overlay.style.display = "flex";
+          subtext.innerText = text;
+        } else {
+          overlay.style.display = "none";
+        }
+      }
+      // -----------------------------------
+
+     window.onload = function() {
+  showLoading(true, "Connecting...");
+
+  // Swipe setup
+  const studentCard = document.getElementById('studentCard');
+
+  if (studentCard) {
+    studentCard.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, {passive: true});
+
+    studentCard.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      if (touchStartX - touchEndX > 50) move(1);
+      else if (touchEndX - touchStartX > 50) move(-1);
+    }, {passive: true});
+  }
+
+  // Load teachers
+  google.script.run
+    .withSuccessHandler(populateDropdown)
+    .withFailureHandler(err => { 
+      showLoading(false); 
+      alert("Error: " + err.message); 
+    })
+    .getTeacherList();
+};
+
+
+      function populateDropdown(data) {
+        availableClasses = data;
+        const dropdown = document.getElementById("classDropdown");
+        const btn = document.getElementById("startBtn");
+        
+        dropdown.innerHTML = '<option value="" disabled selected>Select Teacher...</option>';
+        if (data.length === 0) {
+          dropdown.innerHTML = '<option value="" disabled selected>No data found!</option>';
+          showLoading(false);
+          return;
+        }
+
+        data.forEach((cls, index) => {
+          let option = document.createElement("option");
+          option.value = index; 
+          option.text = `${cls.teacher} - ${cls.subject}`;
+          dropdown.appendChild(option);
+        });
+
+        btn.disabled = false; 
+        showLoading(false);
+      }
+
+      function startApp() {
+        const dropValue = document.getElementById("classDropdown").value;
+        if (dropValue === "") return;
+
+        const selectedClass = availableClasses[dropValue];
+        currentTeacher = selectedClass.teacher;
+        currentSubject = selectedClass.subject;
+
+        document.getElementById("setupScreen").style.display = "none";
+        document.getElementById("appScreen").style.display = "block";
+        
+        const dateInput = document.getElementById('dateSelect');
+        if (!dateInput.value) { dateInput.value = new Date().toISOString().split('T')[0]; }
+        loadData();
+      }
+
+      function loadData() {
+        showLoading(true, "Fetching students...");
+        const selectedDate = document.getElementById('dateSelect').value;
+        
+        google.script.run
+          .withSuccessHandler(data => {
+            students = data;
+            showLoading(false);
+            currentIndex = 0; 
+            if(students.length === 0) {
+              alert("No students found!");
+            } else {
+              buildJumpMenu();
+              updateUI();
+            }
+          })
+          .withFailureHandler(error => { showLoading(false); alert("Error: " + error.message); })
+          .getStudents(selectedDate, currentTeacher, currentSubject);
+      }
+
+      function buildJumpMenu() {
+        const drop = document.getElementById("nameDisplay");
+        drop.innerHTML = "";
+        students.forEach((s, i) => {
+          let opt = document.createElement("option");
+          opt.value = i;
+          opt.text = (i + 1) + ". " + s.name;
+          drop.appendChild(opt);
+        });
+      }
+
+      function jumpToStudent() {
+        const drop = document.getElementById("nameDisplay");
+        currentIndex = parseInt(drop.value);
+        updateUI();
+      }
+
+      function updateUI() {
+        const card = document.getElementById('studentCard');
+        card.className = ''; 
+
+        if (students.length > 0) {
+          const s = students[currentIndex];
+          document.getElementById('nameDisplay').value = currentIndex;
+          document.getElementById('rollBadge').innerText = "ROLL #" + s.roll;
+          
+          const statusDiv = document.getElementById('statusDisplay');
+          statusDiv.innerText = "Status: " + s.status;
+          statusDiv.className = "status-label status-" + s.status.replace(" ", ".");
+          
+          document.getElementById('counter').innerText = `STUDENT ${currentIndex + 1} OF ${students.length}`;
+        }
+      }
+
+      function log(status) {
+        if (students.length === 0) return;
+        const s = students[currentIndex];
+        const selectedDate = document.getElementById('dateSelect').value;
+        s.status = status;
+        
+        const card = document.getElementById('studentCard');
+        card.classList.add('fade-out');
+
+        google.script.run.recordAttendance(s.name, s.enrollment, status, selectedDate, currentTeacher, currentSubject);
+
+        setTimeout(() => {
+          if (currentIndex < students.length - 1) {
+            currentIndex++;
+            card.classList.remove('fade-out');
+            card.classList.add('fade-in');
+            updateUI();
+            setTimeout(() => card.classList.remove('fade-in'), 100);
+          } else {
+            document.getElementById('studentCard').innerHTML =
+  "<h2 style='margin: 40px 0;'>Done! 🎉</h2>" +
+  "<button onclick='goToSetup()' style='width:100%; background:#1a73e8; color:white; padding:15px; border-radius:12px; border:none;'>Back to Setup</button>";
+            document.getElementById('counter').innerText = "";
+          }
+        }, 200);
+      }
+
+      function move(step) {
+        if (students.length === 0) return;
+        currentIndex += step;
+        if (currentIndex < 0) currentIndex = 0;
+        if (currentIndex >= students.length) currentIndex = students.length - 1;
+        updateUI();
+      }
+
+      // SIMPLE, SAFE SWIPE LOGIC
+      let touchStartX = 0;
+      let touchEndX = 0;
+     
+
+function openAdmin() {
+  document.getElementById("setupScreen").style.display = "none";
+  document.getElementById("adminScreen").style.display = "block";
+  loadSubjectDropdown();
+}
+
+function closeAdmin() {
+  document.getElementById("adminScreen").style.display = "none";
+  document.getElementById("setupScreen").style.display = "block";
+}
+
+// SAVE TEACHER
+function saveTeacher() {
+  let name = document.getElementById("tName").value;
+  let subject = document.getElementById("tSubject").value;
+
+  if (!name || !subject) {
+    alert("Fill all fields");
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(msg => {
+      alert(msg);
+      closeAdmin();
+      window.onload(); // reload dropdown only
+    })
+    .addTeacher(name, subject);
+}
+
+// SAVE STUDENT
+function saveStudent() {
+  let name = document.getElementById("sName").value.trim();
+  let enroll = document.getElementById("sEnroll").value.trim();
+  let roll = document.getElementById("sRoll").value.trim();
+  let subject = document.getElementById("sSubject").value.trim();
+
+  // ✅ Validation
+  if (!name || !enroll || !roll || !subject) {
+    alert("⚠️ Please fill all fields");
+    return;
+  }
+
+  // Optional: Roll must be number
+  if (isNaN(roll)) {
+    alert("⚠️ Roll number must be numeric");
+    return;
+  }
+
+  // ✅ Show loading
+  showLoading(true, "Saving student...");
+
+  google.script.run
+    .withSuccessHandler(msg => {
+      showLoading(false);
+      alert("✅ " + msg);
+
+      // ✅ Clear form after success
+      document.getElementById("sName").value = "";
+      document.getElementById("sEnroll").value = "";
+      document.getElementById("sRoll").value = "";
+      document.getElementById("sSubject").value = "";
+    })
+    .withFailureHandler(err => {
+      showLoading(false);
+      alert("❌ Error: " + err.message);
+    })
+    .addStudent(name, enroll, roll, subject);
+}
+function loadSubjectDropdown() {
+  const dropdown = document.getElementById("sSubject");
+
+  // Clear existing
+  dropdown.innerHTML = '<option value="" disabled selected>Select Subject</option>';
+
+  // Use already loaded data
+  let subjects = new Set();
+
+  availableClasses.forEach(cls => {
+    subjects.add(cls.subject);
+  });
+
+  subjects.forEach(sub => {
+    let opt = document.createElement("option");
+    opt.value = sub;
+    opt.text = sub;
+    dropdown.appendChild(opt);
+  });
+}
+function goToSetup() {
+  // Switch screens
+  document.getElementById("appScreen").style.display = "none";
+  document.getElementById("adminScreen").style.display = "none";
+  document.getElementById("setupScreen").style.display = "block";
+
+  // Reset student card UI
+  document.getElementById("studentCard").innerHTML = `
+    <div id="rollBadge" class="roll-badge">Roll #--</div>
+    <select id="nameDisplay" class="name-display" onchange="jumpToStudent()"></select>
+    <div id="statusDisplay" class="status-label status-Not.Marked">Status: Not Marked</div>
+    <div class="btn-group">
+      <button class="attendance-btn present" onclick="log('Present')">PRESENT</button>
+      <button class="attendance-btn absent" onclick="log('Absent')">ABSENT</button>
+    </div>
+  `;
+
+  // Reset variables
+  students = [];
+  currentIndex = 0;
+
+  // ✅ THIS LINE GOES HERE
+  google.script.run.withSuccessHandler(populateDropdown).getTeacherList();
+  google.script.run
+    .withSuccessHandler(populateDropdown)
+    .withFailureHandler(err => alert("Error: " + err.message))
+    .getTeacherList();
+}
+    </script>
+  </body>
+</html>
